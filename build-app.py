@@ -36,11 +36,12 @@ def build_standalone():
     readme_md = read_file('README.md')
     
     # Trova la riga dove viene dichiarato markdown: ''
-    # Cattura tutto fino all'assegnazione e la stringa vuota
+    # Usa un pattern più robusto che accetta sia singole che doppie virgolette
     pattern = r"(markdown:\s*)(['\"])\2"
     
     # Verifica che il pattern esista
-    if not re.search(pattern, index_html):
+    match = re.search(pattern, index_html)
+    if not match:
         print("❌ Errore: Pattern 'markdown:' non trovato in index.html")
         return False
     
@@ -59,12 +60,23 @@ def build_standalone():
         count=1
     )
     
+    # Verifica che la sostituzione sia avvenuta
+    if modified_html == index_html:
+        print("⚠️  Attenzione: La sostituzione del markdown potrebbe non essere avvenuta")
+    
     # Modifica anche la funzione loadMarkdown per non fare fetch
-    # Sostituisci solo il contenuto del try block
-    old_fetch_code = r"const response = await fetch\('README\.md'\);\s*if \(!response\.ok\) throw new Error\('Failed to load README\.md'\);\s*this\.markdown = await response\.text\(\);"
+    # Usa un pattern più flessibile che tollera variazioni di whitespace
+    old_fetch_code = r"const\s+response\s*=\s*await\s+fetch\s*\(\s*['\"]README\.md['\"]\s*\)\s*;\s*if\s*\(\s*!\s*response\.ok\s*\)\s*throw\s+new\s+Error\s*\([^)]+\)\s*;\s*this\.markdown\s*=\s*await\s+response\.text\s*\(\s*\)\s*;"
     new_fetch_code = "// Contenuto già incorporato, non serve fetch"
     
-    modified_html = re.sub(old_fetch_code, new_fetch_code, modified_html, flags=re.DOTALL)
+    result = re.sub(old_fetch_code, new_fetch_code, modified_html, flags=re.DOTALL)
+    
+    # Verifica che anche questa sostituzione sia avvenuta
+    if result == modified_html:
+        print("⚠️  Attenzione: La sostituzione del codice fetch potrebbe non essere avvenuta")
+        print("    Il file generato potrebbe comunque funzionare se il markdown è stato incorporato")
+    
+    modified_html = result
     
     # Aggiungi commento all'inizio per identificare la versione standalone
     standalone_comment = """<!-- 
