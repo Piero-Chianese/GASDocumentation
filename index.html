@@ -638,6 +638,8 @@
 
             parseSections() {
                 const lines = this.markdown.split('\n');
+                // Parse TOC entries that start with '>' (blockquote) followed by number and markdown link
+                // Expected format: "> 1. [Title](#anchor)" or "> 4.1.2 [Title](#anchor)"
                 const tocRegex = /^>\s*(\d+\.)+\s*\[(.+?)\]\(#(.+?)\)/;
                 
                 lines.forEach(line => {
@@ -705,18 +707,27 @@
             },
 
             extractSectionContent(sectionId) {
+                // Extract content between anchor tags. README.md uses: <a name="section-id"></a>
                 const anchorRegex = new RegExp(`<a name="${sectionId}"></a>([\\s\\S]*?)(?=<a name="|$)`);
                 const match = this.markdown.match(anchorRegex);
                 
-                if (match) {
+                if (match && match[1].trim()) {
                     return match[1].trim();
                 }
                 
-                return `<h2>Sezione non trovata</h2><p>Il contenuto per questa sezione non è disponibile.</p>`;
+                // Fallback: try to find content by section heading
+                console.warn(`Section content not found for anchor: ${sectionId}`);
+                return `<h2>Sezione non trovata</h2><p>Il contenuto per questa sezione non è disponibile. L'ancora "${sectionId}" non è stata trovata nel README.md.</p>`;
             },
 
             markdownToHTML(markdown) {
                 let html = markdown;
+
+                // Code blocks (process first to protect their content)
+                html = html.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
+
+                // Inline code (process before other inline formatting)
+                html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
 
                 // Headers
                 html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
@@ -726,14 +737,8 @@
                 // Bold
                 html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 
-                // Italic
-                html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-
-                // Code blocks
-                html = html.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
-
-                // Inline code
-                html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+                // Italic (but not list markers at line start)
+                html = html.replace(/(?<!^)\*(?!\s)(.+?)\*/gm, '<em>$1</em>');
 
                 // Links
                 html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
@@ -828,10 +833,14 @@
                 // Hamburger menu
                 document.getElementById('hamburger').addEventListener('click', () => this.toggleSidebar());
 
-                // Close sidebar when clicking outside on mobile
+                // Close sidebar when clicking outside on mobile (but not on buttons or links)
                 document.getElementById('mainContent').addEventListener('click', (e) => {
                     if (window.innerWidth <= 768 && !document.getElementById('sidebar').classList.contains('hidden')) {
-                        this.toggleSidebar();
+                        // Don't close if clicking on interactive elements
+                        const isInteractive = e.target.closest('button, a, input, select, textarea');
+                        if (!isInteractive) {
+                            this.toggleSidebar();
+                        }
                     }
                 });
             },
